@@ -1,0 +1,11 @@
+kelas,nama,precision,recall,f1,support,model
+0,Baik,0.7251,0.9551,0.8243,312,Logistic Regression
+1,Sedang,0.7911,0.4767,0.5949,707,Logistic Regression
+2,Tidak sehat (sensitif),0.8672,0.6076,0.7145,688,Logistic Regression
+3,Tidak sehat,0.8125,0.7183,0.7625,742,Logistic Regression
+4,Sangat tidak sehat,0.2838,0.9598,0.4381,199,Logistic Regression
+0,Baik,0.6225,0.9038,0.7373,312,SVM linear (OvR LinearSVC)
+1,Sedang,0.6974,0.5771,0.6316,707,SVM linear (OvR LinearSVC)
+2,Tidak sehat (sensitif),0.5703,0.407,0.475,688,SVM linear (OvR LinearSVC)
+3,Tidak sehat,0.6608,0.3019,0.4144,742,SVM linear (OvR LinearSVC)
+4,Sangat tidak sehat,0.2551,1.0,0.4065,199,SVM linear (OvR LinearSVC)

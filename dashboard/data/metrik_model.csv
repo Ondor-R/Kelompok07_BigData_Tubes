@@ -1,0 +1,5 @@
+model,bagian,accuracy,precision_weighted,recall_weighted,f1_weighted,f1_macro
+Logistic Regression,latih,0.8558,0.8687,0.8558,0.8597,0.7037
+Logistic Regression,uji,0.6711,0.771,0.6711,0.6882,0.6669
+SVM linear (OvR LinearSVC),latih,0.7068,0.7537,0.7068,0.7122,0.5074
+SVM linear (OvR LinearSVC),uji,0.5261,0.6121,0.5261,0.5256,0.533

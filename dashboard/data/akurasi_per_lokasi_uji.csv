@@ -1,0 +1,5 @@
+model,location_name,akurasi,n
+Logistic Regression,Taman Tun Dr. Ismail,0.7897,1379
+Logistic Regression,Tambulaung,0.5422,1269
+SVM linear (OvR LinearSVC),Taman Tun Dr. Ismail,0.5431,1379
+SVM linear (OvR LinearSVC),Tambulaung,0.5075,1269

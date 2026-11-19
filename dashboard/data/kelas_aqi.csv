@@ -1,0 +1,6 @@
+label,nama,batas_atas_pm25
+0,Baik,9.0
+1,Sedang,35.4
+2,Tidak sehat (sensitif),55.4
+3,Tidak sehat,125.4
+4,Sangat tidak sehat,225.4
