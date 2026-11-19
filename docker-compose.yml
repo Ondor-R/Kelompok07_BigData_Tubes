@@ -35,6 +35,7 @@ services:
     volumes:
       - ./notebooks:/home/jovyan/work
       - ./data:/home/jovyan/data
+      - ./dashboard:/home/jovyan/dashboard
     depends_on:
       - namenode
 
