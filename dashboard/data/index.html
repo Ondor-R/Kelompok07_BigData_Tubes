@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kualitas Udara TTDI vs Tambulaung</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<script src="../data.js"></script>
+<style>
+:root{--bg:#f5f2ec;--card:#fffdf9;--ink:#1c2a33;--mut:#5c6b73;--line:#ddd6c8;--acc:#1f5f8b;--err-bg:#fde8e8;--err-border:#f98080}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+header{padding:22px 28px 14px;border-bottom:1px solid var(--line);background:#fff}
+h1{font:600 28px/1.2 Georgia,"Times New Roman",serif;margin:0 0 4px}
+h2{font:600 17px/1.3 Georgia,serif;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 12px}
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:end}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:3px}
+select,input,button{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+button{cursor:pointer;background:#f0ebe1;border-color:#ccc}
+button:hover{background:#e2ddd2}
+.btn-primary{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+.btn-primary:hover{background:#174769}
+main{padding:18px 28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:1280px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.wide{grid-column:1/-1}
+.note{font-size:12.5px;color:var(--mut);margin:6px 0 0}
+.chip{display:inline-block;padding:2px 9px;border-radius:12px;font-weight:600;font-size:13px;border:1px solid rgba(0,0,0,.25)}
+.big{font:600 34px/1 Georgia,serif}
+.row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px}
+.cv{position:relative;height:340px}.cv.s{height:260px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:4px 7px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+td.sel,th.sel{background:#e4eef5;font-weight:600}
+.cm td,.cm th{text-align:center;border:1px solid #fff}
+.cm td.d{outline:2px solid var(--ink);outline-offset:-2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.lim li{margin:3px 0}
+.err-box{background:var(--err-bg);border:1px solid var(--err-border);border-radius:8px;padding:14px;margin-bottom:14px}
+.err{color:#9b1c1c;font-weight:600}
+.source-tag{display:inline-block;padding:2px 7px;font-size:11.5px;background:#e9f2f8;color:var(--acc);border-radius:4px;border:1px solid #c0d8ea;margin-left:8px;vertical-align:middle}
+@media(max-width:860px){main{grid-template-columns:1fr;padding:12px}.grid2{grid-template-columns:1fr}header{padding:16px 14px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kualitas Udara TTDI vs Tambulaung <span id="sourceTag" class="source-tag" style="display:none"></span></h1>
+  <p class="sub" id="sub">Memuat data…</p>
+  
+  <div id="fallbackNotice" class="err-box" style="display:none">
+    <div style="font-weight:600;margin-bottom:6px" id="fallbackTitle">Peringatan Akses File</div>
+    <div id="fallbackDesc" style="margin-bottom:10px;font-size:13px"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="manualCsvInput" multiple accept=".csv" style="display:none">
+      <button class="btn-primary" onclick="document.getElementById('manualCsvInput').click()">📂 Pilih File CSV Manual (dari folder data/)</button>
+      <span style="font-size:12px;color:var(--mut)">Atau jalankan: <code>cd dashboard && python -m http.server 8000</code></span>
+    </div>
+  </div>
+
+  <div class="filters">
+    <label>Lokasi<select id="fLoc"><option value="all">Kedua lokasi</option></select></label>
+    <label>Dari tanggal<input type="date" id="fFrom"></label>
+    <label>Sampai tanggal<input type="date" id="fTo"></label>
+    <label>Model<select id="fModel"><option value="lr">Logistic Regression</option><option value="svm">SVM linear</option></select></label>
+    <button id="reset">Atur ulang rentang</button>
+  </div>
+</header>
+<main>
+  <section class="card" id="c0"></section>
+  <section class="card" id="c1"></section>
+
+  <section class="card wide">
+    <h2>PM2.5 per jam dengan pita kategori AQI</h2>
+    <div class="cv"><canvas id="hourly"></canvas></div>
+    <p class="note">Seret pada grafik untuk memperbesar rentang tanggal. Garis terputus di jam yang tidak ada datanya. Waktu lokal Malaysia (UTC+8). Tooltip menandai jam latih, karena prediksi pada data latih terlalu optimistis.</p>
+  </section>
+
+  <section class="card">
+    <h2>Tren PM2.5 bulanan</h2>
+    <div class="cv s"><canvas id="trend"></canvas></div>
+    <p class="note" id="trendNote"></p>
+  </section>
+
+  <section class="card">
+    <h2>Distribusi kategori AQI per lokasi</h2>
+    <div class="cv s"><canvas id="dist"></canvas></div>
+    <p class="note">Proporsi jam menurut kategori asli pada lokasi dan rentang tanggal terpilih.</p>
+  </section>
+
+  <section class="card wide">
+    <h2>Perbandingan model</h2>
+    <div class="grid2">
+      <div>
+        <table id="tMet"></table>
+        <p class="note" id="locAcc"></p>
+      </div>
+      <div><table id="tCls"></table></div>
+    </div>
+    <p class="note">Dihitung pada data uji (1 Sep–28 Okt 2026).</p>
+  </section>
+
+  <section class="card wide">
+    <div class="row" style="margin:0 0 8px"><h2 id="cmT">Confusion matrix</h2>
+      <label>Tampilan<select id="cmMode"><option value="n">Jumlah jam</option><option value="p">Proporsi per baris</option></select></label></div>
+    <div style="overflow-x:auto"><table class="cm" id="cm"></table></div>
+    <p class="note">Baris = kategori asli, kolom = kategori prediksi. Dihitung pada data uji (1 Sep–28 Okt 2026).</p>
+  </section>
+
+  <section class="card wide">
+    <h2>Keterbatasan</h2>
+    <ul class="lim" id="lim"></ul>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const LOC=['Taman Tun Dr. Ismail','Tambulaung'],SH={'Taman Tun Dr. Ismail':'TTDI','Tambulaung':'Tambulaung'};
+const MOD={lr:'Logistic Regression',svm:'SVM linear (OvR LinearSVC)'},MS={lr:'Logistic Regression',svm:'SVM linear'};
+const COL=['#00E400','#FFFF00','#FF7E00','#FF0000','#8F3F97'],TXT=['#000','#000','#000','#fff','#fff'];
+const LC={'Taman Tun Dr. Ismail':'#1f5f8b','Tambulaung':'#a8480f'};
+const BLN=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const CSV_FILES=['prediksi_per_jam','metrik_model','confusion_matrix_uji','metrik_per_kelas_uji','akurasi_per_lokasi_uji','tren_bulanan','kelas_aqi'];
+
+const f4=v=>(+v).toFixed(4),id=v=>(+v).toLocaleString('id-ID');
+let D={},rows=[],byLoc={},S={loc:'all',m:'lr',from:'',to:''},hc,dc,tc,sel=null;
+
+function parseCsv(text){
+  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length===0) return [];
+  const h=lines[0].split(',').map(c=>c.trim());
+  return lines.slice(1).map(line=>{
+    const v=line.split(','),o={};
+    h.forEach((k,i)=>o[k]=v[i]!==undefined?v[i].trim():'');
+    return o;
+  });
+}
+
+async function probeCsvDir(){
+  const candidateDirs=['.', 'data', '../data','dashboard/data','/dashboard/data','/data'];
+  for(const dir of candidateDirs){
+    try{
+      const u=(dir==='.'?'':(dir+'/'))+'kelas_aqi.csv';
+      const r=await fetch(u,{cache:'no-cache'});
+      if(r.ok){
+        const t=await r.text();
+        if(t.includes('batas_atas_pm25')) return dir;
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
+async function loadDataFromHttp(){
+  const baseDir=await probeCsvDir();
+  if(baseDir===null) throw new Error('File CSV tidak ditemukan pada path HTTP relatif.');
+  const p=CSV_FILES.map(async name=>{
+    const u=(baseDir==='.'?'':(baseDir+'/'))+name+'.csv';
+    const r=await fetch(u,{cache:'no-cache'});
+    if(!r.ok) throw new Error('HTTP '+r.status+' saat memuat '+u);
+    const txt=await r.text();
+    return [name, parseCsv(txt)];
+  });
+  const entries=await Promise.all(p);
+  const raw=Object.fromEntries(entries);
+  return {raw, source:'HTTP ('+baseDir+'/*.csv)'};
+}
+
+function loadDataFromBundle(){
+  if(window.__CSV_DATA__ && typeof window.__CSV_DATA__==='object'){
+    const missing=CSV_FILES.find(n=>!window.__CSV_DATA__[n]);
+    if(!missing){
+      const raw={};
+      for(const n of CSV_FILES){
+        raw[n]=parseCsv(window.__CSV_DATA__[n]);
+      }
+      return {raw, source:'Bundle lokal data.js'};
+    }
+  }
+  return null;
+}
+
+const ms=s=>Date.parse(s.replace(' ','T')+'Z');
+const fmt=t=>{const d=new Date(t);return d.getUTCDate()+' '+BLN[d.getUTCMonth()]+' '+d.getUTCFullYear()+' '+d.toISOString().slice(11,16)};
+const chip=k=>(D.kelas && D.kelas[k]) ? `<span class="chip" style="background:${COL[k]};color:${TXT[k]}">${D.kelas[k].nama}</span>` : `<span class="chip">Kelas ${k}</span>`;
+
+function setupDashboard(raw, sourceDesc){
+  $('#fallbackNotice').style.display='none';
+  $('#sourceTag').style.display='inline-block';
+  $('#sourceTag').textContent=sourceDesc;
+
+  D={
+    pred: raw.prediksi_per_jam,
+    met: raw.metrik_model,
+    cm: raw.confusion_matrix_uji,
+    cls: raw.metrik_per_kelas_uji,
+    acc: raw.akurasi_per_lokasi_uji,
+    trend: raw.tren_bulanan,
+    kelas: raw.kelas_aqi.slice().sort((x,y)=>(+x.label)-(+y.label))
+  };
+
+  rows=D.pred.map(r=>({l:r.location_name,t:ms(r.ts_local),d:r.ts_local.slice(0,10),pm:+r.pm25,y:+r.label,lr:+r.pred_lr,svm:+r.pred_svm,uji:r.bagian==='uji'}));
+  byLoc={};
+  LOC.forEach(l=>byLoc[l]=rows.filter(r=>r.l===l).sort((a,b)=>a.t-b.t));
+
+  $('#fLoc').innerHTML='<option value="all">Kedua lokasi</option>';
+  LOC.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=SH[l];$('#fLoc').appendChild(o)});
+
+  const allDates=rows.map(r=>r.d).sort();
+  S.min=allDates[0];
+  S.max=allDates[allDates.length-1];
+
+  let lastTime=-Infinity;
+  for(const r of rows){ if(r.t>lastTime) lastTime=r.t; }
+
+  $('#sub').textContent='Snapshot statis, data sampai '+fmt(lastTime).slice(0,-6)+'. Dua titik sensor OpenAQ di Malaysia.';
+  setRange();
+  ['fLoc','fModel'].forEach(i=>$('#'+i).onchange=e=>{S[i==='fLoc'?'loc':'m']=e.target.value;renderAll()});
+  $('#fFrom').onchange=$('#fTo').onchange=()=>{S.from=$('#fFrom').value||S.min;S.to=$('#fTo').value||S.max;if(S.from>S.to)[S.from,S.to]=[S.to,S.from];syncDates();renderAll()};
+  $('#reset').onclick=()=>{setRange();renderAll()};
+  $('#cmMode').onchange=renderCM;
+
+  buildTrend();
+  renderAll();
+  renderLim();
+}
+
+async function init(){
+  // 1. Try loading directly from HTTP CSV files
+  try {
+    const res = await loadDataFromHttp();
+    setupDashboard(res.raw, res.source);
+    return;
+  } catch(httpErr) {
+    console.warn('Gagal memuat langsung via HTTP:', httpErr.message);
+  }
+
+  // 2. Try loading from bundled data.js (works on file:// protocol)
+  try {
+    const bundleRes = loadDataFromBundle();
+    if(bundleRes){
+      setupDashboard(bundleRes.raw, bundleRes.source);
+      if(window.location.protocol==='file:'){
+        $('#fallbackNotice').style.display='block';
+        $('#fallbackTitle').textContent='Dibuka Menggunakan Protokol file://';
+        $('#fallbackDesc').innerHTML='Browser membatasi pembacaan file CSV mentah saat dibuka lewat <code>file://</code> karena kebijakan keamanan (CORS). Data berhasil dimuat dari file bundle <strong>data.js</strong>.<br>Untuk membaca langsung setiap perubahan file CSV di disk secara otomatis, jalankan server: <code>python -m http.server 8000</code> dari folder dashboard.';
+      }
+      return;
+    }
+  } catch(bundleErr) {
+    console.warn('Gagal memuat dari bundle:', bundleErr.message);
+  }
+
+  // 3. Fallback: prompt manual selection
+  $('#sub').innerHTML='<span class="err">Gagal memuat file CSV otomatis. Jalankan lewat server lokal (<code>python -m http.server 8000</code>) dari folder dashboard atau pilih file CSV di bawah.</span>';
+  $('#fallbackNotice').style.display='block';
+  $('#fallbackTitle').textContent='Gagal Memuat File CSV';
+  $('#fallbackDesc').textContent='Browser tidak dapat membaca file CSV (biasanya terjadi jika membuka file HTML langsung tanpa server lokal karena restriksi CORS). Silakan pilih 7 file CSV dari folder data/ secara manual menggunakan tombol di bawah ini:';
+}
+
+// Manual file picker handling
+$('#manualCsvInput').onchange=async e=>{
+  const files=Array.from(e.target.files);
+  if(files.length===0) return;
+  const raw={};
+  for(const f of files){
+    const baseName=f.name.replace(/\.[^/.]+$/, "");
+    if(CSV_FILES.includes(baseName)){
+      const txt=await f.text();
+      raw[baseName]=parseCsv(txt);
+    }
+  }
+  const missing=CSV_FILES.filter(n=>!raw[n]);
+  if(missing.length>0){
+    alert('Masih kurang file: '+missing.map(m=>m+'.csv').join(', ')+'\nPastikan semua 7 file CSV dari folder data/ dipilih.');
+    return;
+  }
+  setupDashboard(raw, 'File CSV Manual');
+};
+
+function setRange(){S.from=S.min;S.to=S.max;syncDates()}
+function syncDates(){['fFrom','fTo'].forEach((i,k)=>{const e=$('#'+i);e.min=S.min;e.max=S.max;e.value=k?S.to:S.from})}
+function renderAll(){renderCards();renderHourly();renderDist();renderModel();renderCM()}
+
+function renderCards(){
+  LOC.forEach((l,i)=>{
+    const r=byLoc[l][byLoc[l].length-1],p=r[S.m];
+    $('#c'+i).innerHTML=`<h2>${SH[l]}</h2><p class="note" style="margin:0">Jam terakhir dalam data: ${fmt(r.t)} (waktu lokal, UTC+8)</p>
+    <div class="row"><span class="big">${r.pm.toFixed(1)}<small style="font-size:14px"> µg/m³</small></span></div>
+    <div class="row"><span>Kategori asli</span>${chip(r.y)}</div>
+    <div class="row"><span>Prediksi ${MS[S.m]}</span><span>${chip(p)} <small>${p===r.y?'sesuai':'berbeda'}</small></span></div>
+    <p class="note">Prediksi untuk jam ini berdasarkan jam-jam sebelumnya, bukan ramalan jam berikutnya. Jam ini termasuk data ${r.uji?'uji':'latih'}.</p>`;
+  });
+}
+
+const bands={id:'bands',beforeDatasetsDraw(c){
+  const {ctx,chartArea:a,scales:{y}}=c;ctx.save();
+  D.kelas.forEach((k,i)=>{const lo=i?+D.kelas[i-1].batas_atas_pm25:0,hi=+k.batas_atas_pm25;
+    const y1=y.getPixelForValue(Math.min(hi,y.max)),y0=y.getPixelForValue(lo);if(y1>=y0)return;
+    ctx.fillStyle=COL[i]+'44';ctx.fillRect(a.left,y1,a.right-a.left,y0-y1)});
+  if(sel){ctx.fillStyle='rgba(31,95,139,.15)';ctx.fillRect(Math.min(sel[0],sel[1]),a.top,Math.abs(sel[1]-sel[0]),a.bottom-a.top)}
+  ctx.restore()}};
+
+function renderHourly(){
+  const ds=[],lo=Date.parse(S.from+'T00:00:00Z'),hi=Date.parse(S.to+'T00:00:00Z')+864e5;
+  (S.loc==='all'?LOC:[S.loc]).forEach(l=>{
+    const pts=[];let p=null;
+    for(const r of byLoc[l]){if(r.d<S.from||r.d>S.to)continue;
+      if(p!==null&&r.t-p>36e5)pts.push({x:(p+r.t)/2,y:null});
+      pts.push({x:r.t,y:r.pm,r});p=r.t}
+    ds.push({label:SH[l],data:pts,borderColor:LC[l],borderWidth:1.3,pointRadius:0,spanGaps:false,borderDash:l===LOC[1]?[5,3]:[]});
+  });
+  if(hc){hc.data.datasets=ds;hc.options.scales.x.min=lo;hc.options.scales.x.max=hi;hc.update('none');return}
+  hc=new Chart($('#hourly'),{type:'line',data:{datasets:ds},plugins:[bands],options:{
+    maintainAspectRatio:false,animation:false,interaction:{mode:'nearest',axis:'x',intersect:false},
+    scales:{x:{type:'linear',min:lo,max:hi,ticks:{maxTicksLimit:8,callback(v){const s=new Date(v).toISOString();return (this.max-this.min)<4*864e5?s.slice(5,16).replace('T',' '):s.slice(0,10)}}},
+      y:{min:0,max:230,title:{display:true,text:'PM2.5 (µg/m³)'}}},
+    plugins:{tooltip:{callbacks:{
+      title:i=>fmt(i[0].parsed.x),
+      label:c=>{const r=c.raw.r;if(!r)return '';return [`${c.dataset.label}: PM2.5 ${r.pm} µg/m³`,`Kategori asli: ${D.kelas[r.y].nama}`,`Prediksi ${MS[S.m]}: ${D.kelas[r[S.m]].nama}${r.uji?'':' (jam latih, terlalu optimistis)'}`]}}}}}});
+  const cv=$('#hourly');let down=null;
+  cv.addEventListener('mousedown',e=>{down=e.offsetX;sel=[down,down]});
+  cv.addEventListener('mousemove',e=>{if(down!==null){sel=[down,e.offsetX];hc.draw()}});
+  window.addEventListener('mouseup',e=>{if(down===null)return;const s=sel;down=null;sel=null;
+    if(Math.abs(s[1]-s[0])>8){const x=hc.scales.x,a=x.getValueForPixel(Math.min(...s)),b=x.getValueForPixel(Math.max(...s));
+      S.from=new Date(Math.max(a,Date.parse(S.min+'T00:00:00Z'))).toISOString().slice(0,10);
+      S.to=new Date(Math.min(b,Date.parse(S.max+'T00:00:00Z'))).toISOString().slice(0,10);syncDates();renderAll()}else hc.draw()});
+}
+
+function buildTrend(){
+  if(tc){tc.destroy()}
+  const m=[...new Set(D.trend.map(r=>r.bulan))].sort();
+  tc=new Chart($('#trend'),{type:'line',data:{labels:m,datasets:LOC.map(l=>({label:SH[l],borderColor:LC[l],backgroundColor:LC[l],borderDash:l===LOC[1]?[5,3]:[],tension:.2,
+    data:m.map(b=>{const r=D.trend.find(x=>x.location_name===l&&x.bulan===b);return r?+r.pm25_rata_rata:null})}))},
+    options:{maintainAspectRatio:false,scales:{y:{beginAtZero:true,title:{display:true,text:'PM2.5 rata-rata (µg/m³)'}}},
+      plugins:{tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)} µg/m³`}}}}});
+  $('#trendNote').textContent='Bulan tertinggi: '+LOC.map(l=>{const t=D.trend.filter(x=>x.location_name===l).sort((a,b)=>b.pm25_rata_rata-a.pm25_rata_rata)[0];return SH[l]+' '+t.bulan+' ('+(+t.pm25_rata_rata).toFixed(1)+' µg/m³)'}).join('; ')+'. Klik legenda untuk menyembunyikan lokasi.';
+}
+
+function renderDist(){
+  const ls=S.loc==='all'?LOC:[S.loc],cnt=ls.map(l=>{const c=[0,0,0,0,0];byLoc[l].forEach(r=>{if(r.d>=S.from&&r.d<=S.to)c[r.y]++});return c});
+  const ds=D.kelas.map((k,i)=>({label:k.nama,backgroundColor:COL[i],borderColor:'#333',borderWidth:.6,
+    data:cnt.map(c=>{const t=c.reduce((a,b)=>a+b,0);return t?100*c[i]/t:0}),n:cnt.map(c=>c[i])}));
+  const data={labels:ls.map(l=>SH[l]),datasets:ds};
+  if(dc){dc.data=data;dc.update('none');return}
+  dc=new Chart($('#dist'),{type:'bar',data,options:{indexAxis:'y',maintainAspectRatio:false,animation:false,
+    scales:{x:{stacked:true,max:100,title:{display:true,text:'% jam'}},y:{stacked:true}},
+    plugins:{tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.x.toFixed(1)}% (${id(c.dataset.n[c.dataIndex])} jam)`}}}}});
+}
+
+function renderModel(){
+  const M=MOD[S.m],g=(m,k)=>D.met.find(r=>r.model===m&&r.bagian==='uji')[k];
+  const mt=[['accuracy','Accuracy'],['precision_weighted','Precision (weighted)'],['recall_weighted','Recall (weighted)'],['f1_weighted','F1 (weighted)'],['f1_macro','F1 macro']];
+  $('#tMet').innerHTML=`<tr><th>Metrik (data uji)</th>${['lr','svm'].map(k=>`<th class="${k===S.m?'sel':''}">${MS[k]}</th>`).join('')}</tr>`+
+    mt.map(([k,n])=>`<tr><td>${n}</td>${['lr','svm'].map(m=>`<td class="${m===S.m?'sel':''}">${f4(g(MOD[m],k))}</td>`).join('')}</tr>`).join('');
+  $('#locAcc').textContent='Akurasi uji '+MS[S.m]+': '+D.acc.filter(r=>r.model===M).map(r=>SH[r.location_name]+' '+f4(r.akurasi)+' (n='+id(r.n)+')').join('; ');
+  $('#tCls').innerHTML=`<tr><th>Kelas (${MS[S.m]})</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>`+
+    D.cls.filter(r=>r.model===M).sort((a,b)=>a.kelas-b.kelas).map(r=>`<tr><td>${chip(+r.kelas)}</td><td>${f4(r.precision)}</td><td>${f4(r.recall)}</td><td>${f4(r.f1)}</td><td>${id(r.support)}</td></tr>`).join('');
+}
+
+function renderCM(){
+  const M=MOD[S.m],p=$('#cmMode').value==='p',m=[0,1,2,3,4].map(i=>[0,1,2,3,4].map(j=>{const r=D.cm.find(x=>x.model===M&&+x.label_asli===i&&+x.prediksi===j);return r?+r.jumlah:0}));
+  $('#cmT').textContent='Confusion matrix: '+MS[S.m];
+  $('#cm').innerHTML='<tr><th>Asli \\ Prediksi</th>'+D.kelas.map(k=>`<th>${k.nama}</th>`).join('')+'</tr>'+
+    m.map((r,i)=>{const t=r.reduce((a,b)=>a+b,0);return `<tr><th style="text-align:left">${D.kelas[i].nama}</th>`+r.map((v,j)=>{const a=t?v/t:0;
+      return `<td class="${i===j?'d':''}" style="background:rgba(31,95,139,${(a*.9).toFixed(2)});color:${a>.5?'#fff':'#1c2a33'}" title="${id(v)} jam (${(100*a).toFixed(1)}% dari baris)">${p?(100*a).toFixed(1)+'%':id(v)}</td>`}).join('')+'</tr>'}).join('');
+}
+
+function renderLim(){
+  const c=(s,k)=>rows.filter(r=>r.uji===s&&r.y===k).length;
+  $('#lim').innerHTML=[
+   'Hanya dua titik sensor, sehingga hasil tidak mewakili seluruh Malaysia.',
+   `Kelas Sangat tidak sehat hanya ${id(c(false,4))} jam di data latih, tetapi ${id(c(true,4))} jam di data uji. Recall kelas ini tinggi namun precision rendah, sehingga banyak alarm palsu; lihat precision dan recall per kelas, bukan hanya accuracy.`,
+   'Dashboard hanya menunjukkan kapan dan seberapa buruk PM2.5 memburuk. Data (PM2.5, PM1, UM003, suhu, kelembapan di dua titik) tidak cukup untuk menyimpulkan penyebabnya; kaitan dengan asap lintas batas hanya mungkin, bukan terbukti.',
+   'Data latih (Jan–Agu) dan data uji (Sep–Okt) berbeda distribusi; bulan terburuk jatuh di data uji sehingga kinerja uji lebih rendah daripada kinerja latih.',
+   'Model adalah prototipe baseline dengan parameter default tanpa tuning. Data berupa snapshot statis, ada jam yang hilang (celah terpanjang sekitar 52 jam di Tambulaung).'
+  ].map(t=>'<li>'+t+'</li>').join('');
+}
+
+init();
+</script>
+</body>
+</html>
